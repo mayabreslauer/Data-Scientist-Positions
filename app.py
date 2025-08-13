@@ -73,6 +73,73 @@ def set_background():
     """, unsafe_allow_html=True)
 
 # ---------------------- Utils ----------------------
+
+# ---- City normalization (Heb/Eng, variants -> canonical) ----
+CITY_PATTERNS = [
+    (r"(tel[\s\-]?aviv(?:[-\s]?yafo)?|tlv\b|תל[\s\-]?אביב|ת\"א|ת׳א|ta\b)", "Tel Aviv"),
+    (r"(jerusalem|ירושלים)", "Jerusalem"),
+    (r"(haifa|חיפה)", "Haifa"),
+    (r"(herzliya|הרצליה)", "Herzliya"),
+    (r"(ramat\s*gan|רמת\s*גן)", "Ramat Gan"),
+    (r"(givatayim|גבעתיים)", "Givatayim"),
+    (r"(petah\s*tikva|פתח\s*תקו(?:ה|וה))", "Petah Tikva"),
+    (r"(rishon\s*lezion|ראשון\s*לציון)", "Rishon Lezion"),
+    (r"(rehovot|רחובות)", "Rehovot"),
+    (r"(netanya|נתניה)", "Netanya"),
+    (r"(holon|חולון)", "Holon"),
+    (r"(ashdod|אשדוד)", "Ashdod"),
+    (r"(ashkelon|אשקלון)", "Ashkelon"),
+    (r"(hadera|חדרה)", "Hadera"),
+    (r"(modi[íi]n|מודיעין)", "Modiin"),
+    (r"(kfar\s*saba|כפר\s*סבא)", "Kfar Saba"),
+    (r"(ra+na+na|ra?an+an?a|רעננה)", "Raanana"),
+    (r"(yokne[ae][a\'’]m|יקנ[עא]ם)", "Yokneam"),
+    (r"(beit\s*shemesh|בית\s*שמש)", "Beit Shemesh"),
+    (r"(be[\'\s\-]*er[\s\-]*sheva|beer[\s\-]*sheva|באר\s*שבע)", "Beer Sheva"),
+    (r"(nazareth|נצרת)", "Nazareth"),
+    (r"(nahariy?a|נהריה)", "Nahariya"),
+    (r"(karmiel|כרמיאל)", "Karmiel"),
+    (r"(hod[\s\-]*ha[\s\-]*sharon|הוד\s*השרון)", "Hod HaSharon"),
+    (r"(bat[\s\-]*yam|בת\s*ים)", "Bat Yam"),
+    # "Kiryat ..." מגוון — נשאיר ריק אם לא חד־משמעי
+]
+
+NON_CITY_HINTS = [
+    "israel", "il", "remote", "hybrid", "onsite", "on-site",
+    "district", "center", "central", "north", "south", "merkaz", "darom", "zafon",
+]
+
+def normalize_city(raw: str) -> str:
+    """החזרת שם עיר קנוני, או '' אם לא זוהתה עיר."""
+    if not isinstance(raw, str) or not raw.strip():
+        return ""
+    s = raw.strip()
+    # ניקוי טקסט ראשון לפני פסיק (אם יש), והסרת תווים מיוחדים
+    first = s.split(",")[0]
+    first = re.sub(r"[·•\u200f\u200e]", " ", first).strip()
+
+    low = first.lower()
+    # אם זה רק Israel/Remote/Hybrid/מחוז – נחזיר ריק (אלא אם יש אזכור עיר במקום אחר)
+    if any(tok in low for tok in NON_CITY_HINTS):
+        low_all = raw.lower()
+        for pat, canon in CITY_PATTERNS:
+            if re.search(pat, low_all, flags=re.IGNORECASE):
+                return canon
+        return ""
+
+    # התאמה לפי דפוסים בטוקן הראשון
+    for pat, canon in CITY_PATTERNS:
+        if re.search(pat, first, flags=re.IGNORECASE):
+            return canon
+
+    # נסה בכל המחרוזת (אולי העיר לא בטוקן הראשון)
+    for pat, canon in CITY_PATTERNS:
+        if re.search(pat, raw, flags=re.IGNORECASE):
+            return canon
+
+    # לא נמצאה עיר
+    return ""
+
 @st.cache_data(show_spinner=False)
 def load_data(path: str) -> pd.DataFrame:
     encodings = ["utf-8-sig", "utf-8", "cp1255"]
@@ -115,12 +182,14 @@ def load_data(path: str) -> pd.DataFrame:
         df["posted_date"] = pd.NaT
         df["age_days"] = np.nan
 
-    # City heuristic
+    # City heuristic (canonical + empty if none)
     def short_loc(s: str) -> str:
-        if not isinstance(s, str): return ""
+        if not isinstance(s, str):
+            return ""
         s = s.replace("•", " ").strip()
         return s.split(",")[0].strip() if "," in s else s
-    df["city_hint"] = df["location"].apply(short_loc)
+
+    df["city_hint"] = df["location"].apply(lambda x: normalize_city(short_loc(x) or str(x)))
 
     # Canonical link
     if "link_canonical" not in df.columns and "link" in df.columns:
@@ -160,7 +229,6 @@ def df_to_csv_download(df: pd.DataFrame) -> bytes:
 
 
 # --------- Years of experience extraction ---------
-# English patterns like: "3+ years", "at least 2 years", "5 years of experience"
 EN_YEARS_RE = re.compile(
     r"""(?:
             at\ least\ \s*(\d{1,2})\s*\+?\s*years? |
@@ -170,11 +238,10 @@ EN_YEARS_RE = re.compile(
     re.IGNORECASE | re.VERBOSE
 )
 
-# Hebrew patterns like: "לפחות 3 שנות ניסיון", "5 שנים ניסיון", "שנתיים ניסיון"
 HE_YEARS_RE = re.compile(
     r"""(?:
             לפחות\s*(\d{1,2})\s*(?:\+)?\s*(?:שנה|שנים|שנות)\s*ניסיון |
-            (\d{1,2})\s*(?:\+)?\s*(?:שנה|שנים|שנות)\s*ניסיון
+            (\ד{1,2})\s*(?:\+)?\s*(?:שנה|שנים|שנות)\s*ניסיון
         )""",
     re.IGNORECASE | re.VERBOSE
 )
@@ -183,38 +250,25 @@ def extract_years_from_text(text: str) -> float:
     if not text:
         return np.nan
     t = str(text)
-
-    # English matches
     ens = [int(m.group(1) or m.group(2) or m.group(3)) for m in EN_YEARS_RE.finditer(t)]
-    # Hebrew matches
     hes = [int(m.group(1) or m.group(2)) for m in HE_YEARS_RE.finditer(t)]
-
     all_vals = ens + hes
     if not all_vals:
         return np.nan
-
-    # Heuristic: take the MIN years mentioned (entry requirement usually the lower one)
     return float(min(all_vals))
 
 
 # --------- Seniority bucket (title + years) ---------
 def seniority_bucket(title: str, years_required: float) -> str:
     t = (title or "").lower()
-
-    # 1) Management/lead signals from title
     if re.search(r"\b(manager|head|director|vp)\b", t):
         return "Manager+"
     if re.search(r"\b(lead|principal|staff)\b", t):
         return "Lead/Principal"
-
-    # 2) Explicit senior/junior/intern signals from title
     if re.search(r"\b(intern|student|junior|entry)\b", t):
         return "Junior/Entry"
     if re.search(r"\b(senior|sr\.?)\b", t):
-        # If title says Senior but years are very low, still treat as Senior.
         return "Senior"
-
-    # 3) Use years if available
     if isinstance(years_required, (int, float)) and not np.isnan(years_required):
         y = float(years_required)
         if y <= 1:
@@ -225,8 +279,6 @@ def seniority_bucket(title: str, years_required: float) -> str:
             return "Senior"
         if y >= 8:
             return "Lead/Principal"
-
-    # 4) Fallback
     return "Mid"
 
 # ---------------------- UI ----------------------
@@ -260,7 +312,7 @@ with st.sidebar:
 
     # City / location
     cities = sorted([c for c in df["city_hint"].dropna().unique() if c])
-    sel_cities = st.multiselect("City (heuristic)", options=cities, default=[])
+    sel_cities = st.multiselect("City (canonical)", options=cities, default=[])
 
     # Keep only “Only open”
     only_open = st.checkbox("Only open roles", value=True)
@@ -390,7 +442,6 @@ if "date_posted" in tbl.columns and tbl["date_posted"].notna().any():
     try:
         tbl["date_posted"] = tbl["date_posted"].dt.tz_convert("UTC").dt.strftime("%Y-%m-%d %H:%M UTC").fillna("")
     except Exception:
-        # if tz_convert fails (naive), just format
         tbl["date_posted"] = pd.to_datetime(tbl["date_posted"], errors="coerce").dt.strftime("%Y-%m-%d %H:%M").fillna("")
 
 st.dataframe(
