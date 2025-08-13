@@ -3,7 +3,7 @@ from taboola_scraper import scrape_taboola_jobs, upsert_and_mark_stale as upsert
 from similarweb_scraper import scrape_similarweb_jobs, upsert_and_mark_stale as upsert_similarweb
 from melio_scraper import scrape_melio_jobs, upsert_and_mark_stale as upsert_melio
 from riskified_scraper import scrape_riskified_jobs, upsert_and_mark_stale as upsert_riskified
-from merge_jobs import merge_job_csvs
+from merged_jobs import merge_job_csvs
 
 def main():
     print("=== LinkedIn via Serper ===")
@@ -40,5 +40,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
