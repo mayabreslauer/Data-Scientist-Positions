@@ -1,8 +1,8 @@
-from scraper_linkedin import crawl_serper, upsert_and_mark_stale, CSV_PATH as LINKEDIN_OUT
-from scraper_taboola import scrape_taboola_jobs, upsert_and_mark_stale as upsert_taboola
-from scraper_similarweb import scrape_similarweb_jobs, upsert_and_mark_stale as upsert_similarweb
-from scraper_melio import scrape_melio_jobs, upsert_and_mark_stale as upsert_melio
-from scraper_riskified import scrape_riskified_jobs, upsert_and_mark_stale as upsert_riskified
+from linkedin_scraper import crawl_serper, upsert_and_mark_stale, CSV_PATH as LINKEDIN_OUT
+from taboola_scraper import scrape_taboola_jobs, upsert_and_mark_stale as upsert_taboola
+from similarweb_scraper import scrape_similarweb_jobs, upsert_and_mark_stale as upsert_similarweb
+from melio_scraper import scrape_melio_jobs, upsert_and_mark_stale as upsert_melio
+from riskified_scraper import scrape_riskified_jobs, upsert_and_mark_stale as upsert_riskified
 from merge_jobs import merge_job_csvs
 
 def main():
@@ -40,4 +40,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
