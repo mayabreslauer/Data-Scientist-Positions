@@ -26,7 +26,7 @@ jobs:
       - name: Run all scrapers
         env:
           SERPER_API_KEY: ${{ secrets.SERPER_API_KEY }}
-        run: python run all.py
+        run: python run_all.py
 
       - name: Commit & push updated CSV
         run: |
