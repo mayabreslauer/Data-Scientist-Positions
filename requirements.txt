@@ -1,8 +1,4 @@
-os
-io
-base64
-re
 pandas
 numpy
-plotly.express
+plotly
 streamlit
