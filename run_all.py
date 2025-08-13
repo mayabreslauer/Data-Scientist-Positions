@@ -1,4 +1,3 @@
-# run_all.py — ריצה מרוכזת של כל ה־scrapers והאיחוד
 from scraper_linkedin import crawl_serper, upsert_and_mark_stale, CSV_PATH as LINKEDIN_OUT
 from scraper_taboola import scrape_taboola_jobs, upsert_and_mark_stale as upsert_taboola
 from scraper_similarweb import scrape_similarweb_jobs, upsert_and_mark_stale as upsert_similarweb
@@ -41,3 +40,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
