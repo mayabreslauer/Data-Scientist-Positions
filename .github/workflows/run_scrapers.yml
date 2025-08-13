@@ -1,0 +1,37 @@
+name: Run all scrapers and merge
+
+on:
+  workflow_dispatch:   # מאפשר הפעלה ידנית
+  schedule:
+    - cron: "0 */12 * * *"   # ירוץ כל 12 שעות
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run all scrapers
+        env:
+          SERPER_API_KEY: ${{ secrets.SERPER_API_KEY }}
+        run: python run all.py
+
+      - name: Commit & push updated CSV
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add merged_jobs_new.csv
+          git commit -m "Auto update merged_jobs.csv" || echo "No changes to commit"
+          git push
