@@ -1,12 +1,12 @@
 name: Run all scrapers and merge
 
 on:
-  workflow_dispatch:   # הפעלה ידנית
+  workflow_dispatch:   # מאפשר הפעלה ידנית
   schedule:
-    - cron: "0 */12 * * *"   # כל 12 שעות
+    - cron: "0 */12 * * *"   # ירוץ כל 12 שעות
 
 permissions:
-  contents: write   # <<< חשוב: נותן ל-workflow כתיבה לרפו
+  contents: write
 
 jobs:
   build:
@@ -16,16 +16,25 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}  # להשתמש בטוקן של גיטהאב אקשנס
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # מנקה את ה-runner מכל קומיט או קובץ מקומי ישן
+      - name: Reset to remote main
+        run: |
+          git fetch origin main
+          git checkout main
+          git reset --hard origin/main
+          git clean -fdx
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v4
         with:
           python-version: "3.10"
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
+          pip install --upgrade pip
           pip install -r requirements_scraper.txt
 
       - name: Run all scrapers
@@ -39,5 +48,4 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add merged_jobs.csv
           git commit -m "Auto update merged_jobs.csv" || echo "No changes to commit"
-          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/mayabreslauer/Data-Scientist-Positions.git
           git push origin HEAD:main
