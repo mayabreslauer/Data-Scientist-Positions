@@ -16,11 +16,12 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repo
+      - name: Checkout repo (track main)
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
+          ref: main
 
       - name: Sync with origin/main
         run: |
@@ -60,21 +61,48 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Create PR if changes exist
+      - name: Create branch & commit
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          # הגנה: לא לבצע commit על main
+          CURR_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+          if [ "$CURR_BRANCH" = "main" ]; then
+            TS=$(date +%s)
+            BRANCH="auto-update-$TS"
+            git switch -c "$BRANCH"
+          else
+            BRANCH="$CURR_BRANCH"
+          fi
+
+          # לוודא עדכניות לפני יצירת ה-branch
+          git fetch origin main
+          git rebase origin/main || git rebase --abort
+
+          git add merged_jobs.csv
+          git commit -m "Auto update merged_jobs.csv [skip ci]" || echo "Nothing to commit"
+
+          echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Push branch
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          # הגנה: אל תדחוף ל-main
+          if [ "${{ steps.create_branch_and_commit.outputs.branch }}" = "main" ]; then
+            echo "Refusing to push to main"; exit 1
+          fi
+          git push --set-upstream origin "${{ steps.create_branch_and_commit.outputs.branch }}"
+        id: push_branch
+        shell: bash
+
+      - name: Open PR
         if: steps.changes.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TS=$(date +%s)
-          BRANCH="auto-update-$TS"
-          git checkout -b "$BRANCH"
-          git add merged_jobs.csv
-          git commit -m "Auto update merged_jobs.csv [skip ci]"
-          git push origin "$BRANCH"
-
           gh pr create \
             --title "Auto update: merged_jobs.csv" \
             --body "Automated update of merged_jobs.csv" \
             --base main \
-            --head "$BRANCH" \
+            --head "${{ steps.create_branch_and_commit.outputs.branch }}" \
             --label "automation,data-update"
