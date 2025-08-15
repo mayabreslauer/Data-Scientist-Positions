@@ -1,6 +1,8 @@
-name: Run all scrapers and open PR
+name: Run all scrapers and auto-merge PR
 on:
-  workflow_dispatch:   # ריצה ידנית בלבד
+  workflow_dispatch:
+  schedule:
+    - cron: '0 */12 * * *'  # כל 12 שעות (00:00 ו-12:00 UTC)
 
 permissions:
   contents: write
@@ -22,19 +24,19 @@ jobs:
           fetch-depth: 0
           ref: main
 
-      - name: Check if similar PR is already open
+      # עוצרים אם כבר יש PR פתוח של האוטומציה (headRefName שמתחיל ב-auto-update-)
+      - name: Stop if an automation PR is already open
         id: pr_check
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # חיפוש PR פתוח עם אותה כותרת או תוויות
-          OPEN_PR=$(gh pr list --state open --label "automation" --label "data-update" --json number -q '.[0].number')
-          if [ -n "$OPEN_PR" ] && [ "$OPEN_PR" != "null" ]; then
-            echo "Found open PR #$OPEN_PR with automation/data-update labels. Stopping workflow."
+          OPEN_AUTO_PR=$(gh pr list --state open --json number,headRefName -q '.[] | select(.headRefName|startswith("auto-update-")) | .number' | head -n1)
+          if [ -n "$OPEN_AUTO_PR" ]; then
+            echo "Found open automation PR #$OPEN_AUTO_PR. Stopping this run."
             echo "pr_open=true" >> $GITHUB_OUTPUT
             exit 0
           else
-            echo "No open PR found with automation/data-update labels."
+            echo "No open automation PR."
             echo "pr_open=false" >> $GITHUB_OUTPUT
           fi
 
@@ -125,12 +127,54 @@ jobs:
           echo "number=$PR_NUMBER" >> $GITHUB_OUTPUT
           echo "Opened PR: #$PR_NUMBER ($PR_URL)"
 
-      - name: Enable auto-merge
+      - name: Enable auto-merge / try immediate merge
+        if: steps.changes.outputs.changed == 'true' && steps.pr_check.outputs.pr_open == 'false'
+        id: merge_pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          PR="${{ steps.open_pr.outputs.number }}"
+
+          # העדפה: Auto-merge (יעבוד אם מאופשר בריפו)
+          if gh pr merge "$PR" --squash --auto --delete-branch; then
+            echo "mode=auto" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # fallback: ניסיון מיזוג מיידי (אם אין הגנות)
+          if gh pr merge "$PR" --squash --delete-branch; then
+            echo "mode=immediate" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          echo "mode=pending" >> $GITHUB_OUTPUT
+
+      - name: Wait for PR to be merged (short poll)
         if: steps.changes.outputs.changed == 'true' && steps.pr_check.outputs.pr_open == 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           PR="${{ steps.open_pr.outputs.number }}"
-          gh pr merge "$PR" --squash --auto --delete-branch || \
-          gh pr merge "$PR" --squash --delete-branch || \
-          echo "Could not merge immediately; PR left open."
+          MODE="${{ steps.merge_pr.outputs.mode }}"
+
+          # אם התמזג מיידית — לא ממתינים
+          if [ "$MODE" = "immediate" ]; then
+            exit 0
+          fi
+
+          # אם Auto-merge הופעל — נמתין עד 5 דק' (30*10ש')
+          if [ "$MODE" = "auto" ]; then
+            for i in $(seq 1 30); do
+              STATE=$(gh pr view "$PR" --json state -q .state 2>/dev/null || echo "OPEN")
+              if [ "$STATE" = "MERGED" ]; then
+                exit 0
+              fi
+              sleep 10
+            done
+            echo "Auto-merge still pending; continuing."
+            exit 0
+          fi
+
+          # אם לא הופעל Auto-merge — ממשיכים בלי להמתין
+          exit 0
