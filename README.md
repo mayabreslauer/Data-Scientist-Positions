@@ -1,4 +1,5 @@
 # Data-Scientist-Positions
+Note: To conserve LinkedIn API credits, the workflow will only proceed if no pull request is currently open.
 1. The scrapers can be executed on the web server through GitHub Actions.
 2. Dashboard Link: https://data-scientist-positions-zp5mavr2emytmfdfftnsuq.streamlit.app
 
