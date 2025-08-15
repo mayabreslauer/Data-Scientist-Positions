@@ -52,4 +52,3 @@ jobs:
         if: steps.cpr.outputs.pull-request-url
         run: |
           echo "Created PR: ${{ steps.cpr.outputs.pull-request-url }}"
-
