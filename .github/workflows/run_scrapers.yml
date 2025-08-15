@@ -2,7 +2,7 @@ name: Run all scrapers and auto-merge PR
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 */12 * * *'  # כל 12 שעות (00:00 ו-12:00 UTC)
+    - cron: '0 21 * * *'  # כל 24 שעות (00:00 ו-12:00 UTC)
 
 permissions:
   contents: write
