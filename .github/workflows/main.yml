@@ -1,31 +1,25 @@
 name: Run all scrapers and merge
 
 on:
-  workflow_dispatch:   # מאפשר הפעלה ידנית
+  workflow_dispatch:        # הפעלה ידנית
   schedule:
-    - cron: "0 */12 * * *"   # ירוץ כל 12 שעות
+    - cron: "0 */12 * * *"  # כל 12 שעות
 
 permissions:
-  contents: write
+  contents: write           # נדרש כדי לבצע push מה-Action
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
+      - name: Checkout repo (full history)
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
 
-      # מנקה את ה-runner מכל קומיט או קובץ מקומי ישן
-      - name: Reset to remote main
-        run: |
-          git fetch origin main
-          git checkout main
-          git reset --hard origin/main
-          git clean -fdx
+      - name: Mark repo as safe (CI)
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -34,18 +28,39 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install --upgrade pip
+          python -m pip install --upgrade pip
           pip install -r requirements_scraper.txt
 
       - name: Run all scrapers
         env:
           SERPER_API_KEY: ${{ secrets.SERPER_API_KEY }}
+          PYTHONUNBUFFERED: "1"
         run: python run_all.py
 
       - name: Commit & push updated CSV
         run: |
+          set -e
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # ודאו שאנחנו מעודכנים מול main
+          git fetch origin main
+          git checkout main
+          git pull --rebase origin main || true
+
+          # הוספה/קומיט רק אם יש שינוי
           git add merged_jobs.csv
-          git commit -m "Auto update merged_jobs.csv" || echo "No changes to commit"
-          git push origin HEAD:main
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git commit -m "Auto update merged_jobs.csv"
+
+          # ניסיון push רגיל + ניסיון נוסף אחרי rebase
+          if ! git push origin HEAD:main; then
+            echo "Push rejected, rebasing and retrying..."
+            git fetch origin main
+            git pull --rebase origin main || true
+            git push --force-with-lease origin HEAD:main
+          fi
