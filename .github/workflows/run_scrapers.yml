@@ -48,7 +48,4 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           pull-request-number: ${{ steps.cpr.outputs.pull-request-number }}
           merge-method: squash
-      - name: Show PR URL if created
-        if: steps.cpr.outputs.pull-request-url
-        run: |
-          echo "Created PR: ${{ steps.cpr.outputs.pull-request-url }}"
+
