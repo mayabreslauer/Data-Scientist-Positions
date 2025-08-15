@@ -47,17 +47,20 @@ jobs:
           branch-suffix: timestamp
           add-paths: |
             merged_jobs.csv
-          labels: automation, data-update
+          labels: |
+            automation
+            data-update
           delete-branch: true
 
       - name: Enable auto-merge
-        if: ${{ steps.cpr.outputs.pull-request-number }}
+        if: ${{ steps.cpr.outputs['pull-request-number'] != '' }}
         uses: peter-evans/enable-pull-request-automerge@v3
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          pull-request-number: ${{ steps.cpr.outputs.pull-request-number }}
+          pull-request-number: ${{ steps.cpr.outputs['pull-request-number'] }}
           merge-method: squash
 
       - name: Show PR URL (if created)
-        if: ${{ steps.cpr.outputs.pull-request-url }}
-        run: echo "Created PR: ${{ steps.cpr.outputs.pull-request-url }}"
+        if: ${{ steps.cpr.outputs['pull-request-url'] != '' }}
+        run: |
+          echo "Created PR: ${{ steps.cpr.outputs['pull-request-url'] }}"
