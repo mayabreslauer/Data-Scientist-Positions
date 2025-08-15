@@ -1,23 +1,22 @@
 name: Run all scrapers and merge (PR auto-merge)
 
 on:
-  workflow_dispatch:        # הפעלה ידנית
+  workflow_dispatch:
   schedule:
-    - cron: "0 */12 * * *"  # כל 12 שעות
+    - cron: "0 */12 * * *"
 
 permissions:
-  contents: write           # נדרש ליצירת קומיט/PR ומיזוג
+  contents: write
   pull-requests: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0     # טוב ליצירת PR נקי
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -34,7 +33,6 @@ jobs:
           SERPER_API_KEY: ${{ secrets.SERPER_API_KEY }}
         run: python run_all.py
 
-      # יוצרים PR עם השינויים בקובץ ה-CSV
       - name: Create Pull Request with updated CSV
         id: cpr
         uses: peter-evans/create-pull-request@v6
@@ -53,9 +51,8 @@ jobs:
             data-update
           delete-branch: true
 
-      # מפעילים Auto-merge ל-PR (יעבוד אוטומטית אם אין חסמים/בדיקות חובה)
       - name: Enable auto-merge
-        if: steps.cpr.outputs.pull-request-number != ''
+        if: ${{ steps.cpr.outputs.pull-request-number != '' }}
         uses: peter-evans/enable-pull-request-automerge@v3
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -63,5 +60,5 @@ jobs:
           merge-method: squash
 
       - name: Show PR URL (if created)
-        if: steps.cpr.outputs.pull-request-url != ''
+        if: ${{ steps.cpr.outputs.pull-request-url != '' }}
         run: echo "Created PR: ${{ steps.cpr.outputs.pull-request-url }}"
